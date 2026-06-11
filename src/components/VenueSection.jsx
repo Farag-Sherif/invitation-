@@ -5,10 +5,43 @@ import { useWeddingData } from '../context/WeddingDataContext';
 
 export default function VenueSection() {
   const [sectionRef, isRevealed] = useScrollReveal();
-  const { venueName, venueDescription, venueAddress, mapLat, mapLng } = useWeddingData();
+  const { venueName, venueDescription, venueAddress, mapUrl, mapLat, mapLng } = useWeddingData();
+
+  const getIframeSrc = () => {
+    if (mapUrl && mapUrl.includes('<iframe') && mapUrl.includes('src="')) {
+      const match = mapUrl.match(/src="([^"]+)"/);
+      if (match) return match[1];
+    }
+    if (mapUrl && mapUrl.includes('google.com/maps/embed')) {
+      return mapUrl;
+    }
+    if (mapLat && mapLng && !mapUrl) {
+      return `https://maps.google.com/maps?q=${mapLat},${mapLng}&z=14&output=embed`;
+    }
+    if (venueAddress) {
+      return `https://maps.google.com/maps?q=${encodeURIComponent(venueAddress)}&z=14&output=embed`;
+    }
+    if (venueName) {
+      return `https://maps.google.com/maps?q=${encodeURIComponent(venueName)}&z=14&output=embed`;
+    }
+    return '';
+  };
+
+  const getLinkToOpen = () => {
+    if (mapUrl && !mapUrl.includes('<iframe')) return mapUrl;
+    if (mapLat && mapLng) return `https://maps.google.com/?q=${mapLat},${mapLng}`;
+    if (venueAddress) return `https://maps.google.com/?q=${encodeURIComponent(venueAddress)}`;
+    if (venueName) return `https://maps.google.com/?q=${encodeURIComponent(venueName)}`;
+    return null;
+  };
+
+  const iframeSrc = getIframeSrc();
+  const linkToOpen = getLinkToOpen();
 
   const openMap = () => {
-    window.open(`https://maps.google.com/?q=${mapLat},${mapLng}`, '_blank', 'noopener,noreferrer');
+    if (linkToOpen) {
+      window.open(linkToOpen, '_blank', 'noopener,noreferrer');
+    }
   };
 
   return (
@@ -134,7 +167,7 @@ export default function VenueSection() {
         >
           <iframe
             title="موقع القاعة على Google Maps"
-            src={`https://maps.google.com/maps?q=${mapLat},${mapLng}&z=14&output=embed`}
+            src={iframeSrc}
             loading="lazy"
             referrerPolicy="no-referrer-when-downgrade"
             style={{

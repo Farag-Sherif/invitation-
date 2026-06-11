@@ -1,12 +1,10 @@
-import * as db from './database';
-
 const BASE_URL = "https://invaite.test.do-go.net/api";
 
 // Helper to safely parse JSON
 function safeParseJSON(str, fallback) {
   if (!str) return fallback;
   try {
-    return typeof str === 'string' ? JSON.parse(str) : str;
+    return typeof str === "string" ? JSON.parse(str) : str;
   } catch (e) {
     return fallback;
   }
@@ -28,12 +26,11 @@ export async function viewThemeBySlug(slug) {
       throw new Error(`استجابة الخادم غير صالحة: ${response.status}`);
 
     const data = await response.json();
-    
+
     if (data.status === "success" && data.theme) {
       const theme = data.theme;
       const rawData = theme.data || {};
-      
-      // Map API theme details & nested 'data' fields into a unified invitation object
+
       const invitation = {
         slug: theme.slug,
         externalThemeId: theme.id,
@@ -42,8 +39,7 @@ export async function viewThemeBySlug(slug) {
         email: theme.email,
         phone: theme.phone,
         title: theme.title,
-        
-        // Invitation details from rawData
+
         groomName: rawData.groomName || "",
         brideName: rawData.brideName || "",
         weddingDate: rawData.weddingDate || "",
@@ -54,23 +50,35 @@ export async function viewThemeBySlug(slug) {
         venueCity: rawData.venueCity || "",
         venueAddress: rawData.venueAddress || "",
         venueDescription: rawData.venueDescription || "",
-        mapLat: rawData.mapLat || "",
-        mapLng: rawData.mapLng || "",
-        
-        // Complex components — read from _json suffixed keys (our format),
-        // falling back to old key names for backward compatibility.
-        loveStory: safeParseJSON(rawData.love_story_json || rawData.loveStory, []),
-        galleryImages: safeParseJSON(rawData.gallery_images_json || rawData.galleryImages, []),
+        mapUrl: rawData.mapUrl || rawData.mapLat || "",
+
+        loveStory: safeParseJSON(
+          rawData.love_story_json || rawData.loveStory,
+          [],
+        ),
+        galleryImages: safeParseJSON(
+          rawData.gallery_images_json || rawData.galleryImages,
+          [],
+        ),
         videos: safeParseJSON(rawData.videos_json || rawData.videos, []),
-        rsvpSettings: safeParseJSON(rawData.rsvp_settings_json || rawData.rsvpSettings, { enabled: true }),
-        customSections: safeParseJSON(rawData.custom_sections_json || rawData.customSections, []),
-        theme: safeParseJSON(rawData.theme_custom_json || rawData.theme_custom || rawData.theme, {}),
-        coverImage: rawData.coverImage || theme.cover_image || ""
+        rsvpSettings: safeParseJSON(
+          rawData.rsvp_settings_json || rawData.rsvpSettings,
+          { enabled: true },
+        ),
+        customSections: safeParseJSON(
+          rawData.custom_sections_json || rawData.customSections,
+          [],
+        ),
+        theme: safeParseJSON(
+          rawData.theme_custom_json || rawData.theme_custom || rawData.theme,
+          {},
+        ),
+        coverImage: rawData.coverImage || theme.cover_image || "",
       };
-      
+
       return { success: true, data: invitation };
     }
-    
+
     throw new Error("تنسيق استجابة غير صالح من السيرفر");
   } catch (err) {
     console.error("[API] view-theme Error:", err);
@@ -88,9 +96,25 @@ export async function getInvitationBySlug(slug) {
   return viewThemeBySlug(slug);
 }
 
+/**
+ * GET ALL INVITATIONS FROM SERVER
+ * لو الـ API عنده listing endpoint استخدمه هنا
+ * حالياً بيرجع array فاضية لأن الـ API مش بيدعم listing
+ */
+export async function getAllInvitationsFromServer() {
+  return { success: true, data: [] };
+}
+
+/**
+ * Kept for compatibility - same as getAllInvitationsFromServer
+ */
+export async function getAllInvitations() {
+  return getAllInvitationsFromServer();
+}
+
 // Helper to convert base64 data URL to a Blob for file upload
 function dataURLtoBlob(dataurl) {
-  const arr = dataurl.split(',');
+  const arr = dataurl.split(",");
   const mime = arr[0].match(/:(.*?);/)[1];
   const bstr = atob(arr[1]);
   let n = bstr.length;
@@ -102,32 +126,38 @@ function dataURLtoBlob(dataurl) {
 }
 
 /**
- * UPLOAD / CREATE OR UPDATE INVITATION ON SERVER (ALL AT ONCE)
+ * UPLOAD / CREATE OR UPDATE INVITATION ON SERVER
  * POST /api/add-theme OR POST /api/update-theme/:id
  */
-export async function createOrUpdateInvitationOnServer(invitation, heroImageFile) {
+export async function createOrUpdateInvitationOnServer(
+  invitation,
+  heroImageFile,
+) {
   const isUpdate = !!invitation.externalThemeId;
-  const url = isUpdate 
-    ? `${BASE_URL}/update-theme/${invitation.externalThemeId}` 
+  const url = isUpdate
+    ? `${BASE_URL}/update-theme/${invitation.externalThemeId}`
     : `${BASE_URL}/add-theme`;
 
   console.log(`[API] POST (Upload) theme to ${url}`, invitation);
 
   try {
     const formData = new FormData();
-    
-    // Core fields expected by API root
+
     formData.append("theme_id", invitation.themeId || "4");
-    formData.append("user_id", invitation.userId || "2");
-    formData.append("email", invitation.email || "ahmed5bdelaal@gmail.com");
-    formData.append("phone", invitation.phone || "01212393872");
-    formData.append("title", invitation.title || `${invitation.groomName} & ${invitation.brideName}`);
-    
-    if (invitation.owner_name) formData.append("owner_name", invitation.owner_name);
-    if (invitation.password) formData.append("password", invitation.password);
-    
+    formData.append("user_id", invitation.userId || "");
+    formData.append("email", invitation.email || "");
+    formData.append("phone", invitation.phone || "");
+    formData.append(
+      "title",
+      invitation.title || `${invitation.groomName} & ${invitation.brideName}`,
+    );
+
     let uploadFile = heroImageFile;
-    if (!uploadFile && invitation.coverImage && invitation.coverImage.startsWith('data:image/')) {
+    if (
+      !uploadFile &&
+      invitation.coverImage &&
+      invitation.coverImage.startsWith("data:image/")
+    ) {
       try {
         uploadFile = dataURLtoBlob(invitation.coverImage);
       } catch (e) {
@@ -139,8 +169,6 @@ export async function createOrUpdateInvitationOnServer(invitation, heroImageFile
       formData.append("hero_image", uploadFile, "hero_image.jpg");
     }
 
-    // All extra details appended to FormData — stored inside the server's 'data' JSON blob.
-    // Plain text fields (safe to send as-is):
     formData.append("slug", invitation.slug);
     formData.append("groomName", invitation.groomName || "");
     formData.append("brideName", invitation.brideName || "");
@@ -152,18 +180,30 @@ export async function createOrUpdateInvitationOnServer(invitation, heroImageFile
     formData.append("venueCity", invitation.venueCity || "");
     formData.append("venueAddress", invitation.venueAddress || "");
     formData.append("venueDescription", invitation.venueDescription || "");
-    formData.append("mapLat", invitation.mapLat || "");
-    formData.append("mapLng", invitation.mapLng || "");
-    
-    // Complex arrays/objects — use "_json" suffix to avoid clashing with
-    // Laravel's file-upload validation rules (e.g. "galleryImages" is validated
-    // as an array of image files on the backend).
-    formData.append("love_story_json", JSON.stringify(invitation.loveStory || []));
-    formData.append("gallery_images_json", JSON.stringify(invitation.galleryImages || []));
+    formData.append("mapUrl", invitation.mapUrl || "");
+    formData.append("mapLat", invitation.mapUrl || ""); // Fallback for backend backwards compatibility
+
+    formData.append(
+      "love_story_json",
+      JSON.stringify(invitation.loveStory || []),
+    );
+    formData.append(
+      "gallery_images_json",
+      JSON.stringify(invitation.galleryImages || []),
+    );
     formData.append("videos_json", JSON.stringify(invitation.videos || []));
-    formData.append("rsvp_settings_json", JSON.stringify(invitation.rsvpSettings || { enabled: true }));
-    formData.append("custom_sections_json", JSON.stringify(invitation.customSections || []));
-    formData.append("theme_custom_json", JSON.stringify(invitation.theme || {}));
+    formData.append(
+      "rsvp_settings_json",
+      JSON.stringify(invitation.rsvpSettings || { enabled: true }),
+    );
+    formData.append(
+      "custom_sections_json",
+      JSON.stringify(invitation.customSections || []),
+    );
+    formData.append(
+      "theme_custom_json",
+      JSON.stringify(invitation.theme || {}),
+    );
 
     const response = await fetch(url, {
       method: "POST",
@@ -172,18 +212,19 @@ export async function createOrUpdateInvitationOnServer(invitation, heroImageFile
     });
 
     if (!response.ok) {
-      // Try to capture the validation error details from the response body
       let errorDetail = `استجابة غير صالحة من السيرفر: ${response.status}`;
       try {
         const errBody = await response.json();
         console.error("[API] Server validation errors:", errBody);
         if (errBody.errors) {
-          const msgs = Object.values(errBody.errors).flat().join(' | ');
+          const msgs = Object.values(errBody.errors).flat().join(" | ");
           errorDetail = msgs || errorDetail;
         } else if (errBody.message) {
           errorDetail = errBody.message;
         }
-      } catch (_) { /* ignore parse failure */ }
+      } catch (_) {
+        /* ignore parse failure */
+      }
       throw new Error(errorDetail);
     }
 
@@ -192,84 +233,58 @@ export async function createOrUpdateInvitationOnServer(invitation, heroImageFile
     return { success: true, data };
   } catch (err) {
     console.error("[API] Upload Error:", err);
-    return { success: false, error: err.message || "فشلت عملية حفظ البيانات على السيرفر" };
+    return {
+      success: false,
+      error: err.message || "فشلت عملية حفظ البيانات على السيرفر",
+    };
   }
 }
 
 /**
- * Compatibility Wrappers for Context
+ * Compatibility Wrappers
  */
 export async function createInvitation(invitationData, heroImageFile) {
   return createOrUpdateInvitationOnServer(invitationData, heroImageFile);
 }
 
-export async function updateInvitation(externalThemeId, invitationData, heroImageFile) {
-  // If we only have updates, we should retrieve the full object first or merge with updates
-  const fullInv = await db.getInvitationBySlug(invitationData.slug);
-  
-  if (fullInv && fullInv.userId && invitationData.userId && String(fullInv.userId) !== String(invitationData.userId)) {
-    return { success: false, error: "لا يمكن تعديل هذه الدعوة: رقم تعريف المستخدم غير متطابق" };
-  }
-
-  const merged = { ...fullInv, ...invitationData, externalThemeId };
+export async function updateInvitation(
+  externalThemeId,
+  invitationData,
+  heroImageFile,
+) {
+  const merged = { ...invitationData, externalThemeId };
   return createOrUpdateInvitationOnServer(merged, heroImageFile);
 }
 
 export async function deleteInvitation(slug) {
-  // Since the API doesn't support deleting a theme/invitation, we perform a local delete.
   console.log(`[API] Local-only delete invitation requested for: ${slug}`);
   return { success: true };
 }
 
 export async function bulkUploadInvitations(invitationsArray) {
-  // Loop and upload each invitation to the server
-  console.log(`[API] Starting bulk upload of ${invitationsArray.length} invitations...`);
-  return { success: true }; // Context handles the actual loop to capture database ID updates.
-}
-
-/**
- * GET ALL INVITATIONS
- * Calls local db since the API has no listing endpoint
- */
-export async function getAllInvitations() {
-  try {
-    const data = await db.getAllInvitations();
-    return { success: true, data };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
+  console.log(
+    `[API] Starting bulk upload of ${invitationsArray.length} invitations...`,
+  );
+  return { success: true };
 }
 
 /**
  * GET WISHES (COMMENTS)
- * Calls local db since the API has no GET comments endpoint
  */
 export async function getWishesForSlug(slug) {
-  try {
-    const data = await db.getWishes(slug);
-    return { success: true, data };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
+  return { success: true, data: [] };
 }
 
 /**
  * GET RSVPS
- * Calls local db since the API has no GET RSVPs endpoint
  */
 export async function getRSVPsForSlug(slug) {
-  try {
-    const data = await db.getRSVPs(slug);
-    return { success: true, data };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
+  return { success: true, data: [] };
 }
 
 /**
  * ADD COMMENT
  * POST /api/add-comment
- * Fields: name, comment, theme_id
  */
 export async function addComment({ themeId, name, comment }) {
   console.log(`[API] POST ${BASE_URL}/add-comment`);
@@ -324,7 +339,6 @@ export async function deleteComment(commentId) {
 /**
  * ADD RSVP
  * POST /api/add-rsvp
- * Fields: rsvp_name, rsvp_email, theme_id, rsvp_guests, rsvp_events, rsvp_message
  */
 export async function addRSVP({
   themeId,
@@ -365,7 +379,6 @@ export async function addRSVP({
 /**
  * CHECK USER LOGIN
  * POST /api/check-user
- * Fields: phone, password
  */
 export async function checkUserLogin(phone, password) {
   console.log(`[API] POST ${BASE_URL}/check-user`);
@@ -393,6 +406,9 @@ export async function checkUserLogin(phone, password) {
     return { success: true, data };
   } catch (err) {
     console.error("[API] check-user Error:", err);
-    return { success: false, error: err.message || "رقم الهاتف أو كلمة المرور غير صحيحة" };
+    return {
+      success: false,
+      error: err.message || "رقم الهاتف أو كلمة المرور غير صحيحة",
+    };
   }
 }

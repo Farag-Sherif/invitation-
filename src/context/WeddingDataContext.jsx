@@ -1,22 +1,28 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import * as api from "../utils/api";
-import * as db from "../utils/database";
 
 const WeddingDataContext = createContext(null);
 
-// Helper: بيشيل الـ slug قبل ما يبعت للـ API
-const stripSlug = ({ slug, ...rest }) => rest;
+const DEFAULT_THEME = {
+  primaryColor: "#C9A84C",
+  secondaryColor: "#D4707A",
+  accentColor: "#B8936A",
+  backgroundColor: "#0B0E17",
+  textColor: "#FFFFFF",
+  cardColor: "#12151F",
+  animationSpeed: 1,
+  borderRadius: "16px",
+  fontFamily: "'Tajawal', sans-serif",
+};
 
 export function WeddingDataProvider({ children }) {
   const [activeInvitation, setActiveInvitation] = useState(null);
   const [wishes, setWishes] = useState([]);
   const [rsvps, setRsvps] = useState([]);
-
   const [allInvitations, setAllInvitations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Derived from activeInvitation directly
   const activeSlug = activeInvitation?.slug ?? "";
 
   useEffect(() => {
@@ -24,23 +30,25 @@ export function WeddingDataProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (activeInvitation && activeInvitation.theme) {
+    if (activeInvitation?.theme) {
       applyTheme(activeInvitation.theme);
     }
   }, [activeInvitation]);
 
   const fetchAllInvitations = async () => {
     try {
-      const res = await api.getAllInvitations();
-      if (res.success) {
-        setAllInvitations(res.data);
-      }
+      const res = await api.getAllInvitationsFromServer();
+      if (res.success) setAllInvitations(res.data);
     } catch (err) {
       console.error("Failed to load all invitations listing:", err);
     }
   };
 
   const loadInvitation = async (slug) => {
+    if (!slug) {
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     setError(null);
     console.log(`[Context] Loading invitation slug: "${slug}"`);
@@ -55,85 +63,129 @@ export function WeddingDataProvider({ children }) {
         const rsvpsRes = await api.getRSVPsForSlug(slug);
         if (rsvpsRes.success) setRsvps(rsvpsRes.data);
       } else {
-        console.warn(
-          `[Context] Server load failed: ${res.error}. Falling back to local DB...`,
-        );
-        const localInv = await db.getInvitationBySlug(slug);
-        if (localInv) {
-          setActiveInvitation(localInv);
-          setWishes((await db.getWishes(slug)) || []);
-          setRsvps((await db.getRSVPs(slug)) || []);
-        } else {
-          setError("NOT_FOUND");
-          setActiveInvitation(null);
-        }
+        setError("NOT_FOUND");
+        setActiveInvitation(null);
       }
     } catch (err) {
       console.error("[Context] Unexpected error loading invitation:", err);
-      const localInv = await db.getInvitationBySlug(slug);
-      if (localInv) {
-        setActiveInvitation(localInv);
-        setWishes((await db.getWishes(slug)) || []);
-        setRsvps((await db.getRSVPs(slug)) || []);
-      } else {
-        setError(err.message || "حدث خطأ غير متوقع");
-        setActiveInvitation(null);
-      }
+      setError(err.message || "حدث خطأ غير متوقع");
+      setActiveInvitation(null);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const loadDemoInvitation = () => {
+    setIsLoading(true);
+    setError(null);
+    console.log(`[Context] Loading DEMO invitation`);
+    const demoData = {
+      slug: "demo",
+      groomName: "أحمد",
+      brideName: "سارة",
+      weddingDate: "2026-10-15",
+      weddingTime: "20:30",
+      hijriDate: "1448-04-05",
+      invitationText: "تغمرنا السعادة بدعوتكم لمشاركتنا فرحة العمر وتتويج قصة حبنا في ليلة من ألف ليلة وليلة.",
+      venueName: "قاعة الماسة الذهبية",
+      venueCity: "الرياض",
+      venueAddress: "فندق الريتز كارلتون",
+      venueDescription: "ننتظركم في قاعة الماسة الذهبية للاحتفال معنا وسط أجواء من البهجة والسرور.",
+      mapUrl: "https://maps.app.goo.gl/Wq4xX3d8xS9xY4Q8",
+      loveStory: [
+        { year: "2023", title: "اللقاء الأول", text: "صدفة جميلة جمعت بين قلبينا لتبدأ أجمل حكاية.", icon: "Heart" },
+        { year: "2024", title: "الخطوبة", text: "في ليلة عائلية دافئة، تعاهدنا على السير معاً في دروب الحياة.", icon: "Ring" },
+        { year: "2026", title: "الزفاف", text: "اليوم نجتمع لنعلن بداية رحلتنا الأبدية محاطين بأحبابنا.", icon: "Star" }
+      ],
+      galleryImages: [
+        { id: "1", src: "https://images.unsplash.com/photo-1511285560929-80b456fea0bc?q=80&w=2069&auto=format&fit=crop", label: "لحظات لا تنسى" },
+        { id: "2", src: "https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=2070&auto=format&fit=crop", label: "الحب يجمعنا" },
+        { id: "3", src: "https://images.unsplash.com/photo-1520854221256-17451cc331bf?q=80&w=2070&auto=format&fit=crop", label: "يوم زفافنا" }
+      ],
+      videos: [],
+      rsvpSettings: { enabled: true },
+      customSections: [],
+      theme: DEFAULT_THEME,
+      coverImage: "https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=2070&auto=format&fit=crop",
+    };
+    setActiveInvitation(demoData);
+    setWishes([
+      { id: "1", name: "محمد وعائلته", message: "ألف مبروك للعروسين، بالرفاء والبنين إن شاء الله." },
+      { id: "2", name: "صديقات العروسة", message: "سعداء جداً من أجلك يا سارة، نتمنى لكما حياة مليئة بالحب والسعادة." }
+    ]);
+    setRsvps([]);
+    setIsLoading(false);
+  };
+
   const handleCreateInvitation = async (invitationData) => {
     try {
-      const defaultData = {
-        ...db.DEFAULT_WEDDING_DATA,
-        ...invitationData,
-        loveStory: db.DEFAULT_WEDDING_DATA.loveStory || [],
-        galleryImages: db.DEFAULT_WEDDING_DATA.galleryImages || [],
-        theme: db.DEFAULT_WEDDING_DATA.theme || {},
+      const newInvitation = {
+        groomName: invitationData.groomName || "",
+        brideName: invitationData.brideName || "",
+        weddingDate: invitationData.weddingDate || "",
+        weddingTime: invitationData.weddingTime || "",
+        hijriDate: invitationData.hijriDate || "",
+        invitationText:
+          invitationData.invitationText ||
+          "يتشرف أولياء الأمور بدعوتكم لحضور حفل الزفاف الميمون ومشاركتنا بهجة العمر وليلة الميثاق الغليظ.",
+        venueName: invitationData.venueName || "",
+        venueCity: invitationData.venueCity || "",
+        venueAddress: invitationData.venueAddress || "",
+        venueDescription: invitationData.venueDescription || "",
+        mapUrl: invitationData.mapUrl || "",
+        loveStory: invitationData.loveStory || [],
+        galleryImages: invitationData.galleryImages || [],
+        videos: invitationData.videos || [],
+        rsvpSettings: invitationData.rsvpSettings || { enabled: true },
+        customSections: invitationData.customSections || [],
+        theme: invitationData.theme || DEFAULT_THEME,
+        coverImage: invitationData.coverImage || "",
+        slug: invitationData.slug,
+        userId: invitationData.userId,
+        themeId: invitationData.themeId || "4",
+        email: invitationData.email || "",
+        phone: invitationData.phone || "",
+        title:
+          invitationData.title ||
+          `${invitationData.groomName} & ${invitationData.brideName}`,
       };
-      await db.saveInvitation(defaultData);
-      await fetchAllInvitations();
-      return { success: true, data: defaultData };
+
+      const res = await api.createOrUpdateInvitationOnServer(newInvitation);
+      if (res.success) {
+        if (res.data?.theme?.id) {
+          newInvitation.externalThemeId = res.data.theme.id;
+          if (res.data.theme.user_id)
+            newInvitation.userId = res.data.theme.user_id;
+        }
+        await fetchAllInvitations();
+        return { success: true, data: newInvitation };
+      } else {
+        return { success: false, error: res.error };
+      }
     } catch (e) {
-      console.error("[Context] Create local invitation error:", e);
+      console.error("[Context] Create invitation error:", e);
       return { success: false, error: e.message };
     }
   };
 
   const handleUpdateInvitation = async (slug, updates) => {
     try {
-      const current = await db.getInvitationBySlug(slug);
-      if (!current) throw new Error("لم يتم العثور على الدعوة محلياً");
+      if (!activeInvitation) throw new Error("لم يتم تحميل الدعوة");
 
-      if (
-        current.userId &&
-        updates.userId &&
-        String(current.userId) !== String(updates.userId)
-      ) {
-        throw new Error(
-          "لا يمكن تعديل هذه الدعوة: رقم تعريف المستخدم غير متطابق",
-        );
-      }
+      const merged = { ...activeInvitation, ...updates };
 
-      const merged = { ...current, ...updates };
-      await db.saveInvitation(merged);
-
-      if (merged.externalThemeId) {
-        const res = await api.createOrUpdateInvitationOnServer(
-          stripSlug(merged),
-        );
-        if (res.success && res.data?.theme?.id) {
+      const res = await api.createOrUpdateInvitationOnServer(merged);
+      if (res.success) {
+        if (res.data?.theme?.id) {
           merged.externalThemeId = res.data.theme.id;
           if (res.data.theme.user_id) merged.userId = res.data.theme.user_id;
-          await db.saveInvitation(merged);
         }
+        setActiveInvitation(merged);
+        await fetchAllInvitations();
+        return { success: true, data: merged };
+      } else {
+        return { success: false, error: res.error };
       }
-
-      if (slug === activeSlug) setActiveInvitation(merged);
-      await fetchAllInvitations();
-      return { success: true, data: merged };
     } catch (err) {
       console.error("[Context] Update Invitation error:", err);
       return { success: false, error: err.message };
@@ -141,35 +193,12 @@ export function WeddingDataProvider({ children }) {
   };
 
   const handlePublishInvitation = async (slug) => {
-    try {
-      const invitation = await db.getInvitationBySlug(slug);
-      if (!invitation) throw new Error("لم يتم العثور على الدعوة محلياً");
-
-      const res = await api.createOrUpdateInvitationOnServer(
-        stripSlug(invitation),
-      );
-      if (res.success) {
-        if (res.data?.theme?.id) {
-          invitation.externalThemeId = res.data.theme.id;
-          if (res.data.theme.user_id)
-            invitation.userId = res.data.theme.user_id;
-          await db.saveInvitation(invitation);
-          if (slug === activeSlug) setActiveInvitation(invitation);
-        }
-        await fetchAllInvitations();
-        return { success: true, data: res.data };
-      } else {
-        return { success: false, error: res.error };
-      }
-    } catch (err) {
-      console.error("[Context] Publish invitation error:", err);
-      return { success: false, error: err.message };
-    }
+    return handleUpdateInvitation(slug, {});
   };
 
   const handleDeleteInvitation = async (slug) => {
     try {
-      await db.deleteInvitation(slug);
+      await api.deleteInvitation(slug);
       if (slug === activeSlug) setActiveInvitation(null);
       await fetchAllInvitations();
       return { success: true };
@@ -182,17 +211,11 @@ export function WeddingDataProvider({ children }) {
   const handleBulkUploadInvitations = async (invitationsArray) => {
     let successCount = 0;
     let errors = [];
-
     for (const inv of invitationsArray) {
       try {
-        const res = await api.createOrUpdateInvitationOnServer(stripSlug(inv));
+        const res = await api.createOrUpdateInvitationOnServer(inv);
         if (res.success) {
           successCount++;
-          if (res.data?.theme?.id) {
-            inv.externalThemeId = res.data.theme.id;
-            if (res.data.theme.user_id) inv.userId = res.data.theme.user_id;
-            await db.saveInvitation(inv);
-          }
         } else {
           errors.push(`${inv.slug}: ${res.error}`);
         }
@@ -200,9 +223,7 @@ export function WeddingDataProvider({ children }) {
         errors.push(`${inv.slug}: ${err.message}`);
       }
     }
-
     await fetchAllInvitations();
-
     if (errors.length > 0) {
       return {
         success: successCount > 0,
@@ -213,12 +234,9 @@ export function WeddingDataProvider({ children }) {
   };
 
   const handleSaveRSVP = async (rsvpData) => {
-    const rsvpPayload = { ...rsvpData, invitationSlug: activeSlug };
     try {
-      const saved = await db.saveRSVP(rsvpPayload);
-
       if (activeInvitation?.externalThemeId) {
-        await api.addRSVP({
+        const res = await api.addRSVP({
           themeId: activeInvitation.externalThemeId,
           name: rsvpData.name,
           email: rsvpData.email || "",
@@ -226,75 +244,48 @@ export function WeddingDataProvider({ children }) {
           events: rsvpData.events || "test",
           message: rsvpData.message || "",
         });
+        if (res.success) {
+          const saved = { ...rsvpData, id: Date.now().toString() };
+          setRsvps((prev) => [saved, ...prev]);
+          return { success: true, data: saved };
+        }
+        return { success: false, error: res.error };
       }
-
-      if (saved) {
-        setRsvps((prev) => {
-          const index = prev.findIndex((item) => item.id === saved.id);
-          if (index >= 0) {
-            const next = [...prev];
-            next[index] = saved;
-            return next;
-          }
-          return [saved, ...prev];
-        });
-        return { success: true, data: saved };
-      }
-      return { success: false, error: "فشل حفظ الرد محلياً" };
+      return { success: false, error: "الدعوة غير منشورة على السيرفر" };
     } catch (e) {
       return { success: false, error: e.message };
     }
   };
 
   const handleSaveWish = async (wishData) => {
-    const wishPayload = { ...wishData, invitationSlug: activeSlug };
     try {
-      const saved = await db.saveWish(wishPayload);
-
       if (activeInvitation?.externalThemeId) {
-        await api.addComment({
+        const res = await api.addComment({
           themeId: activeInvitation.externalThemeId,
           name: wishData.name,
           comment: wishData.message,
         });
+        if (res.success) {
+          const saved = { ...wishData, id: Date.now().toString() };
+          setWishes((prev) => [saved, ...prev]);
+          return { success: true, data: saved };
+        }
+        return { success: false, error: res.error };
       }
-
-      if (saved) {
-        setWishes((prev) => {
-          const index = prev.findIndex((item) => item.id === saved.id);
-          if (index >= 0) {
-            const next = [...prev];
-            next[index] = saved;
-            return next;
-          }
-          return [saved, ...prev];
-        });
-        return { success: true, data: saved };
-      }
-      return { success: false, error: "فشل حفظ التهنئة" };
+      return { success: false, error: "الدعوة غير منشورة على السيرفر" };
     } catch (e) {
       return { success: false, error: e.message };
     }
   };
 
   const handleDeleteRSVP = async (id) => {
-    try {
-      await db.deleteRSVP(id);
-      setRsvps((prev) => prev.filter((item) => item.id !== id));
-      return { success: true };
-    } catch (e) {
-      return { success: false, error: e.message };
-    }
+    setRsvps((prev) => prev.filter((item) => item.id !== id));
+    return { success: true };
   };
 
   const handleDeleteWish = async (id) => {
-    try {
-      await db.deleteWish(id);
-      setWishes((prev) => prev.filter((item) => item.id !== id));
-      return { success: true };
-    } catch (e) {
-      return { success: false, error: e.message };
-    }
+    setWishes((prev) => prev.filter((item) => item.id !== id));
+    return { success: true };
   };
 
   const applyTheme = (theme) => {
@@ -310,7 +301,6 @@ export function WeddingDataProvider({ children }) {
       borderRadius: "--radius-card",
       fontFamily: "--font-family",
     };
-
     Object.entries(theme).forEach(([key, value]) => {
       const cssVar = THEME_KEYS[key];
       if (cssVar) {
@@ -384,6 +374,7 @@ export function WeddingDataProvider({ children }) {
     isLoading,
     error,
     loadInvitation,
+    loadDemoInvitation,
     createInvitation: handleCreateInvitation,
     updateInvitation: handleUpdateInvitation,
     deleteInvitation: handleDeleteInvitation,
@@ -398,28 +389,6 @@ export function WeddingDataProvider({ children }) {
     formattedTime,
     formattedDate,
     updateWeddingData: (updates) => handleUpdateInvitation(activeSlug, updates),
-    resetToDefaults: async () => {
-      const res = await api.getInvitationBySlug("fatima-mohamed");
-      if (res.success) {
-        await handleUpdateInvitation(activeSlug, {
-          brideName: res.data.brideName,
-          groomName: res.data.groomName,
-          weddingDate: res.data.weddingDate,
-          weddingTime: res.data.weddingTime,
-          hijriDate: res.data.hijriDate,
-          venueName: res.data.venueName,
-          venueAddress: res.data.venueAddress,
-          venueCity: res.data.venueCity,
-          venueDescription: res.data.venueDescription,
-          mapLat: res.data.mapLat,
-          mapLng: res.data.mapLng,
-          invitationText: res.data.invitationText,
-          loveStory: res.data.loveStory,
-          galleryImages: res.data.galleryImages,
-          theme: res.data.theme,
-        });
-      }
-    },
   };
 
   return (

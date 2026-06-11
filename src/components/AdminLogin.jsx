@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
-import * as db from '../utils/database';
 import * as api from '../utils/api';
 
 export default function AdminLogin({ onLogin, targetSlug, urlPhone }) {
@@ -13,70 +12,51 @@ export default function AdminLogin({ onLogin, targetSlug, urlPhone }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (!urlPhone) {
+      setError('رابط غير صالح: رقم الهاتف مفقود');
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 600);
+      return;
+    }
+
+    const loginRes = await api.checkUserLogin(urlPhone, password);
+
+    if (!loginRes.success) {
+      setError(loginRes.error || 'رقم الهاتف أو كلمة المرور غير صحيحة');
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 600);
+      return;
+    }
+
+    const userId = loginRes.data?.user?.id;
+
     if (targetSlug) {
-      if (!urlPhone) {
-        setError('رابط غير صالح: رقم الهاتف مفقود');
+      const themeRes = await api.viewThemeBySlug(targetSlug);
+
+      if (!themeRes.success || !themeRes.data) {
+        setError('الدعوة غير موجودة');
         setIsShaking(true);
         setTimeout(() => setIsShaking(false), 600);
         return;
       }
 
-      // Check user login using the backend API
-      const loginRes = await api.checkUserLogin(urlPhone, password);
-      if (loginRes.success) {
-        // Verify if the user is linked to the current invitation
-        let inv = await db.getInvitationBySlug(targetSlug);
-        if (!inv) {
-          const themeRes = await api.viewThemeBySlug(targetSlug);
-          if (themeRes.success && themeRes.data) {
-            inv = themeRes.data;
-            await db.saveInvitation(inv);
-          }
-        }
+      const inv = themeRes.data;
+      const invUserId = inv.userId || inv.user_id;
 
-        if (inv) {
-          const matchesPhone = String(inv.phone) === String(urlPhone);
-          // If API returns user data, we could also check userId
-          const matchesUserId = loginRes.data && loginRes.data.user && String(inv.userId) === String(loginRes.data.user.id);
-          
-          if (!matchesPhone && !matchesUserId) {
-            setError('هذا الحساب غير مصرح له بالدخول لهذه الدعوة');
-            setIsShaking(true);
-            setTimeout(() => setIsShaking(false), 600);
-            return;
-          }
-        } else {
-          setError('الدعوة غير موجودة');
-          setIsShaking(true);
-          setTimeout(() => setIsShaking(false), 600);
-          return;
-        }
-
-        sessionStorage.setItem(`admin-authenticated-${targetSlug}`, 'true');
-        onLogin();
-      } else {
-        setError(loginRes.error || 'رقم الهاتف أو كلمة المرور غير صحيحة');
+      if (String(invUserId) !== String(userId)) {
+        setError('Unauthorized Access');
         setIsShaking(true);
         setTimeout(() => setIsShaking(false), 600);
+        return;
       }
+
+      sessionStorage.setItem('admin-user-id', userId);
+      sessionStorage.setItem(`admin-authenticated-${targetSlug}`, 'true');
+      onLogin();
     } else {
-      // Global Admin Check
-      let storedData;
-      try {
-        storedData = JSON.parse(localStorage.getItem('wedding-data') || '{}');
-      } catch {
-        storedData = {};
-      }
-      const correctPassword = storedData.adminPassword || 'admin123';
-
-      if (password === correctPassword) {
-        sessionStorage.setItem('admin-authenticated-global', 'true');
-        onLogin();
-      } else {
-        setError('كلمة المرور غير صحيحة');
-        setIsShaking(true);
-        setTimeout(() => setIsShaking(false), 600);
-      }
+      sessionStorage.setItem('admin-user-id', userId);
+      sessionStorage.setItem('admin-authenticated-global', 'true');
+      onLogin();
     }
   };
 
@@ -92,7 +72,6 @@ export default function AdminLogin({ onLogin, targetSlug, urlPhone }) {
         direction: 'rtl'
       }}
     >
-      {/* Background decorative elements */}
       <div
         style={{
           position: 'fixed',
@@ -131,7 +110,6 @@ export default function AdminLogin({ onLogin, targetSlug, urlPhone }) {
             boxShadow: '0 32px 64px rgba(0, 0, 0, 0.3)'
           }}
         >
-          {/* Lock Icon */}
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
@@ -152,7 +130,6 @@ export default function AdminLogin({ onLogin, targetSlug, urlPhone }) {
             <Lock size={30} />
           </motion.div>
 
-          {/* Title */}
           <div style={{ textAlign: 'center' }}>
             <h1
               className="font-amiri"
@@ -177,7 +154,6 @@ export default function AdminLogin({ onLogin, targetSlug, urlPhone }) {
             </p>
           </div>
 
-          {/* Password Field */}
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label
               className="font-tajawal"
@@ -236,7 +212,6 @@ export default function AdminLogin({ onLogin, targetSlug, urlPhone }) {
               </button>
             </div>
 
-            {/* Error message */}
             {error && (
               <motion.p
                 initial={{ opacity: 0, y: -5 }}
@@ -254,7 +229,6 @@ export default function AdminLogin({ onLogin, targetSlug, urlPhone }) {
             )}
           </div>
 
-          {/* Submit button */}
           <button
             type="submit"
             className="primary-action"
@@ -279,7 +253,6 @@ export default function AdminLogin({ onLogin, targetSlug, urlPhone }) {
             <ArrowLeft size={18} />
           </button>
 
-          {/* Back to invitation link */}
           <a
             href="/"
             className="font-tajawal"

@@ -39,10 +39,9 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
   const [isUploading, setIsUploading] = useState(false);
   
   // Dashboard navigation tab
-  const [activeTab, setActiveTab] = useState(singleInvitationMode ? 'general' : 'manage'); 
+  const [activeTab, setActiveTab] = useState('general'); 
   const [editingSlug, setEditingSlug] = useState(singleInvitationMode ? userEditSlug : '');
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
 
   // Modals visibility
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -56,17 +55,6 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
   const [importError, setImportError] = useState('');
   const [isImporting, setIsImporting] = useState(false);
 
-  // Form states for adding a new invitation
-  const [newSlug, setNewSlug] = useState('');
-  const [newGroom, setNewGroom] = useState('');
-  const [newBride, setNewBride] = useState('');
-  const [newDate, setNewDate] = useState('2026-10-24');
-  const [newTime, setNewTime] = useState('19:00');
-  const [newOwnerName, setNewOwnerName] = useState('');
-  const [newPhone, setNewPhone] = useState('');
-  const [createPassword, setCreatePassword] = useState('');
-  const [createError, setCreateError] = useState('');
-
   // Form states for general data (editing active invitation)
   const [groomName, setGroomName] = useState('');
   const [brideName, setBrideName] = useState('');
@@ -75,7 +63,7 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
   const [hijriDate, setHijriDate] = useState('');
   const [invitationText, setInvitationText] = useState('');
   const [themeId, setThemeId] = useState('4');
-  const [userId, setUserId] = useState('2');
+  const [userId, setUserId] = useState(sessionStorage.getItem('admin-user-id') || '2');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
 
@@ -84,8 +72,7 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
   const [venueCity, setVenueCity] = useState('');
   const [venueAddress, setVenueAddress] = useState('');
   const [venueDescription, setVenueDescription] = useState('');
-  const [mapLat, setMapLat] = useState('');
-  const [mapLng, setMapLng] = useState('');
+  const [mapUrl, setMapUrl] = useState('');
 
   // Form states for love story (array of 3 cards)
   const [story0, setStory0] = useState({ year: '', title: '', text: '', icon: '' });
@@ -112,6 +99,7 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   // Gallery states
+  const [galleryImages, setGalleryImages] = useState([]);
   const [newImageUrl, setNewImageUrl] = useState('');
   const [newImageLabel, setNewImageLabel] = useState('');
   const [newImageAspect, setNewImageAspect] = useState('portrait');
@@ -144,14 +132,14 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
       setVenueCity(inv.venueCity || '');
       setVenueAddress(inv.venueAddress || '');
       setVenueDescription(inv.venueDescription || '');
-      setMapLat(inv.mapLat || '');
-      setMapLng(inv.mapLng || '');
+      setMapUrl(inv.mapUrl || inv.mapLat || '');
 
       setStory0(inv.loveStory?.[0] || { year: '', title: '', text: '', icon: '' });
       setStory1(inv.loveStory?.[1] || { year: '', title: '', text: '', icon: '' });
       setStory2(inv.loveStory?.[2] || { year: '', title: '', text: '', icon: '' });
 
       setCoverImage(inv.coverImage || '');
+      setGalleryImages(inv.galleryImages || []);
       setVideos(inv.videos || []);
       setRsvpEnabled(inv.rsvpSettings?.enabled ?? true);
       setRsvpDeadline(inv.rsvpSettings?.deadline || '');
@@ -235,37 +223,56 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
     return `${base}-${rand}`;
   };
 
-  // Create new invitation handler (slug auto-generated)
-  const handleCreateSubmit = async (e) => {
-    e.preventDefault();
-    setCreateError('');
+  const handleCreateAndPublishAll = async () => {
+    if (!groomName || !brideName) {
+      alert("الرجاء إدخال اسم العريس واسم العروسة في تبويب البيانات العامة على الأقل");
+      return;
+    }
+    
+    setIsPublishing(true);
+    try {
+      const generatedSlug = generateSlugFromNames(groomName, brideName);
+      const urlParams = new URLSearchParams(window.location.search);
+      const userParam = urlParams.get('user');
+      const storedUserId = sessionStorage.getItem('admin-user-id') || '2';
 
-    const generatedSlug = generateSlugFromNames(newGroom, newBride);
+      const fullData = {
+        slug: generatedSlug,
+        userId: storedUserId,
+        email: email,
+        phone: phone || userParam || '',
+        groomName,
+        brideName,
+        weddingDate,
+        weddingTime,
+        hijriDate,
+        invitationText: invitationText || 'يتشرف أولياء الأمور بدعوتكم لحضور حفل الزفاف الميمون ومشاركتنا بهجة العمر وليلة الميثاق الغليظ.',
+        themeId: '4',
+        venueName,
+        venueCity,
+        venueAddress,
+        venueDescription,
+        mapUrl,
+        loveStory: [story0, story1, story2],
+        rsvpSettings: { enabled: rsvpEnabled, deadline: rsvpDeadline, maxGuests: rsvpMaxGuests },
+        coverImage,
+        galleryImages,
+        videos,
+        customSections,
+      };
 
-    const res = await createInvitation({
-      slug: generatedSlug,
-      owner_name: newOwnerName,
-      phone: newPhone,
-      password: createPassword,
-      groomName: newGroom,
-      brideName: newBride,
-      weddingDate: newDate,
-      weddingTime: newTime,
-      hijriDate: '',
-      invitationText: 'يتشرف أولياء الأمور بدعوتكم لحضور حفل الزفاف الميمون ومشاركتنا بهجة العمر وليلة الميثاق الغليظ.'
-    });
-
-    if (res.success) {
-      setShowCreateModal(false);
-      setNewGroom('');
-      setNewBride('');
-      setNewOwnerName('');
-      setNewPhone('');
-      setCreatePassword('');
-      // Open immediately for editing
-      handleEditInvitation(generatedSlug);
-    } else {
-      setCreateError(res.error || 'فشلت عملية إنشاء الدعوة');
+      const res = await createInvitation(fullData);
+      if (res.success) {
+        triggerSuccessFeedback();
+        alert('تم إنشاء ونشر الدعوة بنجاح على السيرفر (API)!');
+        window.location.href = `/${generatedSlug}/admin${userParam ? `?user=${userParam}` : ''}`;
+      } else {
+        alert('فشل الإنشاء: ' + (res.error || 'خطأ غير معروف'));
+      }
+    } catch (e) {
+      alert('خطأ: ' + e.message);
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -341,51 +348,59 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
   // Save changes to database
   const handleSaveGeneral = async (e) => {
     e.preventDefault();
-    await updateInvitation(editingSlug, {
-      groomName,
-      brideName,
-      weddingDate,
-      weddingTime,
-      hijriDate,
-      invitationText,
-      themeId,
-      userId,
-      email,
-      phone
-    });
+    if (singleInvitationMode) {
+      const storedUserId = sessionStorage.getItem('admin-user-id') || userId || '2';
+      await updateInvitation(editingSlug, {
+        groomName,
+        brideName,
+        weddingDate,
+        weddingTime,
+        hijriDate,
+        invitationText,
+        themeId: '4',
+        userId: storedUserId,
+        email,
+        phone
+      });
+    }
     triggerSuccessFeedback();
   };
 
   const handleSaveVenue = async (e) => {
     e.preventDefault();
-    await updateInvitation(editingSlug, {
-      venueName,
-      venueCity,
-      venueAddress,
-      venueDescription,
-      mapLat,
-      mapLng
-    });
+    if (singleInvitationMode) {
+      await updateInvitation(editingSlug, {
+        venueName,
+        venueCity,
+        venueAddress,
+        venueDescription,
+        mapUrl,
+      });
+    }
     triggerSuccessFeedback();
   };
 
   const handleSaveStory = async (e) => {
     e.preventDefault();
-    await updateInvitation(editingSlug, {
-      loveStory: [story0, story1, story2]
-    });
+    if (singleInvitationMode) {
+      await updateInvitation(editingSlug, {
+        loveStory: [story0, story1, story2]
+      });
+    }
     triggerSuccessFeedback();
   };
 
   const handleSaveRSVPSettings = async (e) => {
     e.preventDefault();
-    await updateInvitation(editingSlug, {
-      rsvpSettings: {
-        enabled: rsvpEnabled,
-        deadline: rsvpDeadline,
-        maxGuests: rsvpMaxGuests
-      }
-    });
+    if (singleInvitationMode) {
+      await updateInvitation(editingSlug, {
+        rsvpSettings: {
+          enabled: rsvpEnabled,
+          deadline: rsvpDeadline,
+          maxGuests: rsvpMaxGuests
+        }
+      });
+    }
     triggerSuccessFeedback();
   };
 
@@ -426,7 +441,9 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
         
         const base64 = canvas.toDataURL('image/jpeg', 0.8);
         setCoverImage(base64);
-        updateInvitation(editingSlug, { coverImage: base64 });
+        if (singleInvitationMode) {
+          updateInvitation(editingSlug, { coverImage: base64 });
+        }
         triggerSuccessFeedback();
       };
       img.src = event.target.result;
@@ -488,8 +505,11 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
       aspect: newImageAspect
     };
 
-    const updated = [...(weddingData.galleryImages || []), newImg];
-    await updateInvitation(editingSlug, { galleryImages: updated });
+    const updated = [...galleryImages, newImg];
+    setGalleryImages(updated);
+    if (singleInvitationMode) {
+      await updateInvitation(editingSlug, { galleryImages: updated });
+    }
     
     setNewImageUrl('');
     setNewImageLabel('');
@@ -498,12 +518,15 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
   };
 
   const handleDeleteImage = async (id) => {
-    const updated = (weddingData.galleryImages || []).filter(img => img.id !== id);
-    await updateInvitation(editingSlug, { galleryImages: updated });
+    const updated = galleryImages.filter(img => img.id !== id);
+    setGalleryImages(updated);
+    if (singleInvitationMode) {
+      await updateInvitation(editingSlug, { galleryImages: updated });
+    }
   };
 
   const handleMoveImage = async (index, direction) => {
-    const list = [...(weddingData.galleryImages || [])];
+    const list = [...galleryImages];
     if (direction === 'up' && index > 0) {
       const temp = list[index];
       list[index] = list[index - 1];
@@ -513,7 +536,10 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
       list[index] = list[index + 1];
       list[index + 1] = temp;
     }
-    await updateInvitation(editingSlug, { galleryImages: list });
+    setGalleryImages(list);
+    if (singleInvitationMode) {
+      await updateInvitation(editingSlug, { galleryImages: list });
+    }
   };
 
   // Video Management handlers
@@ -533,7 +559,9 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
 
     const updated = [...videos, embedUrl];
     setVideos(updated);
-    await updateInvitation(editingSlug, { videos: updated });
+    if (singleInvitationMode) {
+      await updateInvitation(editingSlug, { videos: updated });
+    }
     setNewVideoUrl('');
     triggerSuccessFeedback();
   };
@@ -541,7 +569,9 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
   const handleDeleteVideo = async (index) => {
     const updated = videos.filter((_, idx) => idx !== index);
     setVideos(updated);
-    await updateInvitation(editingSlug, { videos: updated });
+    if (singleInvitationMode) {
+      await updateInvitation(editingSlug, { videos: updated });
+    }
   };
 
   // Custom Sections Management
@@ -557,7 +587,9 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
 
     const updated = [...customSections, newSec];
     setCustomSections(updated);
-    await updateInvitation(editingSlug, { customSections: updated });
+    if (singleInvitationMode) {
+      await updateInvitation(editingSlug, { customSections: updated });
+    }
     
     setNewSectionTitle('');
     setNewSectionContent('');
@@ -567,7 +599,9 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
   const handleDeleteSection = async (id) => {
     const updated = customSections.filter(sec => sec.id !== id);
     setCustomSections(updated);
-    await updateInvitation(editingSlug, { customSections: updated });
+    if (singleInvitationMode) {
+      await updateInvitation(editingSlug, { customSections: updated });
+    }
   };
 
   // Password and cleaning handlers
@@ -667,6 +701,8 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
     { id: 'data', name: 'التهاني والسرية', icon: Database },
   ];
 
+
+
   return (
     <div className="font-tajawal" style={{ 
       minHeight: '100vh', 
@@ -721,16 +757,16 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
             </div>
             <div>
               <h1 className="font-amiri" style={{ fontSize: '1.4rem', fontWeight: 'bold', margin: 0, color: 'white' }}>
-                {singleInvitationMode ? 'تعديل دعوتك' : 'لوحة إدارية متكاملة للزفاف'}
+                {singleInvitationMode ? 'تعديل دعوتك' : 'إنشاء دعوة جديدة'}
               </h1>
               <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', margin: 0 }}>
-                {editingSlug ? `تعديل دعوة: ${editingSlug}` : 'إدارة وإنشاء دعوات الزفاف التفاعلية'}
+                {singleInvitationMode ? `تعديل دعوة: ${editingSlug}` : 'أدخل بياناتك لإنشاء دعوة الزفاف الخاصة بك ورفعها مرة واحدة'}
               </p>
             </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {editingSlug && (
+            {singleInvitationMode ? (
               <>
                 <button
                   onClick={handlePublishActiveInvitation}
@@ -753,7 +789,7 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
                   }}
                 >
                   <Upload size={16} />
-                  <span>{weddingData.activeInvitation?.externalThemeId ? 'تحديث على السيرفر (API)' : 'نشر على السيرفر (API)'}</span>
+                  <span>تحديث على السيرفر (API)</span>
                 </button>
 
                 <button
@@ -777,29 +813,31 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
                   <Eye size={16} />
                   <span>معاينة ({editingSlug})</span>
                 </button>
-
-                {!singleInvitationMode && (
-                  <button
-                    onClick={handleBackToList}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '0.5rem 1.2rem',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(255,255,255,0.15)',
-                      background: 'rgba(255,255,255,0.05)',
-                      color: 'white',
-                      cursor: 'pointer',
-                      fontSize: '0.85rem',
-                      fontWeight: 'bold',
-                      transition: 'all 0.3s'
-                    }}
-                  >
-                    <span>قائمة الدعوات</span>
-                  </button>
-                )}
               </>
+            ) : (
+              <button
+                onClick={handleCreateAndPublishAll}
+                disabled={isPublishing}
+                className="primary-action"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '0.5rem 1.1rem',
+                  borderRadius: '8px',
+                  background: 'linear-gradient(135deg, var(--color-primary, #C9A84C) 0%, var(--color-secondary, #D4707A) 100%)',
+                  border: 'none',
+                  color: 'var(--color-bg, #0B0E17)',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  fontWeight: 'bold',
+                  opacity: isPublishing ? 0.7 : 1,
+                  transition: 'all 0.3s'
+                }}
+              >
+                <Upload size={16} />
+                <span>إنشاء ونشر الدعوة (Publish)</span>
+              </button>
             )}
             
             <button
@@ -835,12 +873,12 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
         position: 'relative',
         zIndex: 1,
         display: 'grid',
-        gridTemplateColumns: activeTab === 'manage' ? '1fr' : '260px 1fr',
+        gridTemplateColumns: '260px 1fr',
         gap: '2rem'
       }} className="admin-grid-container">
         
         {/* Navigation Sidebar (Only shown when editing an invitation) */}
-        {activeTab !== 'manage' && (
+        {(
           <aside className="glass-premium" style={{
             borderRadius: '16px',
             border: '1px solid rgba(255, 255, 255, 0.06)',
@@ -892,30 +930,6 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
               );
             })}
 
-            {!singleInvitationMode && (
-              <button
-                onClick={handleBackToList}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  width: '100%',
-                  padding: '0.85rem 1rem',
-                  borderRadius: '10px',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  background: 'rgba(255,255,255,0.02)',
-                  color: 'white',
-                  cursor: 'pointer',
-                  fontSize: '0.9rem',
-                  textAlign: 'right',
-                  marginTop: '1rem',
-                  transition: 'all 0.3s'
-                }}
-              >
-                <ChevronLeft size={18} />
-                <span>العودة لقائمة الدعوات</span>
-              </button>
-            )}
           </aside>
         )}
 
@@ -952,216 +966,7 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
             )}
           </AnimatePresence>
 
-          {/* TAB 0: Manage Invitations Listing */}
-          {activeTab === 'manage' && (
-            <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} style={{
-              display: 'flex', flexDirection: 'column', gap: '2rem'
-            }}>
-              
-              {/* Controls bar */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '1rem'
-              }}>
-                <div style={{ position: 'relative', width: '320px' }}>
-                  <Search size={18} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)' }} />
-                  <input
-                    type="text"
-                    placeholder="ابحث باسم صاحب الدعوة أو العروسين..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="admin-input"
-                    style={{ paddingRight: '2.5rem' }}
-                  />
-                </div>
 
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                  <button
-                    onClick={() => setShowImportModal(true)}
-                    className="secondary-action"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '0.8rem 1.5rem',
-                      borderRadius: '12px',
-                      border: '1px solid var(--color-primary, #C9A84C)',
-                      background: 'rgba(201, 168, 76, 0.08)',
-                      color: 'var(--color-primary, #C9A84C)',
-                      fontWeight: 'bold',
-                      fontSize: '0.9rem',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <Download size={18} />
-                    <span>استيراد من السيرفر</span>
-                  </button>
-
-                  <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="primary-action shimmer-button"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '0.8rem 1.8rem',
-                      borderRadius: '12px',
-                      border: 'none',
-                      background: 'linear-gradient(135deg, var(--color-primary, #C9A84C) 0%, var(--color-secondary, #D4707A) 100%)',
-                      color: 'var(--color-bg, #0B0E17)',
-                      fontWeight: 'bold',
-                      fontSize: '0.9rem',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <Plus size={18} />
-                    <span>إنشاء دعوة جديدة</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Grid cards display */}
-              {filteredInvitations.length === 0 ? (
-                <div className="glass-premium" style={{
-                  padding: '4rem 2rem',
-                  borderRadius: '16px',
-                  textAlign: 'center',
-                  background: 'rgba(255,255,255,0.02)'
-                }}>
-                  <AlertTriangle size={40} style={{ color: 'var(--color-primary, #C9A84C)', marginBottom: '1rem' }} />
-                  <h3 className="font-amiri" style={{ fontSize: '1.4rem', fontWeight: 'bold' }}>لم يتم العثور على أي دعوات زفاف</h3>
-                  <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', marginTop: '6px' }}>
-                    {searchQuery ? 'جرب البحث بكلمات أخرى أو تحقق من الحروف' : 'ابدأ بإنشاء أول دعوة زفاف تفاعلية بالنقر على الزر أعلاه'}
-                  </p>
-                </div>
-              ) : (
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-                  gap: '1.5rem'
-                }}>
-                  {filteredInvitations.map((inv) => (
-                    <motion.div
-                      key={inv.slug}
-                      className="glass-premium hover-glow"
-                      style={{
-                        padding: '1.75rem',
-                        borderRadius: '16px',
-                        background: 'rgba(255, 255, 255, 0.02)',
-                        border: '1px solid rgba(255,255,255,0.05)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                        gap: '1.25rem',
-                        position: 'relative',
-                        overflow: 'hidden'
-                      }}
-                    >
-                      {/* Top ribbon ornament */}
-                      <div style={{
-                        position: 'absolute',
-                        top: 0,
-                        right: 0,
-                        width: '80px',
-                        height: '4px',
-                        background: `linear-gradient(90deg, ${inv.theme?.primaryColor || 'var(--color-primary)'}, ${inv.theme?.secondaryColor || 'var(--color-secondary)'})`
-                      }} />
-
-                      <div>
-                        {/* Invitation Owner / Slug */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                          <Link2 size={14} style={{ color: 'var(--color-primary, #C9A84C)' }} />
-                          <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--color-primary, #C9A84C)', letterSpacing: '0.5px' }}>
-                            /{inv.slug}
-                          </span>
-                        </div>
-
-                        {/* Groom & Bride names */}
-                        <h3 className="font-amiri" style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: '0 0 6px', color: '#FFF' }}>
-                          {inv.groomName} & {inv.brideName}
-                        </h3>
-
-                        {/* Date details */}
-                        <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', margin: 0 }}>
-                          📅 {inv.weddingDate} | ⏰ {inv.weddingTime}
-                        </p>
-                      </div>
-
-                      {/* Controls / Action buttons */}
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        borderTop: '1px solid rgba(255,255,255,0.06)',
-                        paddingTop: '1rem',
-                        gap: '10px'
-                      }}>
-                        <button
-                          onClick={() => handleEditInvitation(inv.slug)}
-                          style={{
-                            flex: 1,
-                            padding: '0.55rem',
-                            borderRadius: '8px',
-                            border: 'none',
-                            background: 'rgba(201, 168, 76, 0.12)',
-                            color: 'var(--color-primary, #C9A84C)',
-                            fontWeight: 'bold',
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            transition: 'all 0.3s'
-                          }}
-                        >
-                          تعديل التفاصيل
-                        </button>
-                        
-                        <button
-                          onClick={() => window.open(`/${inv.slug}`, '_blank')}
-                          title="عرض الصفحة العامة"
-                          style={{
-                            padding: '0.55rem',
-                            borderRadius: '8px',
-                            border: '1px solid rgba(255,255,255,0.1)',
-                            background: 'transparent',
-                            color: 'rgba(255,255,255,0.8)',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.3s'
-                          }}
-                          className="hover-glow"
-                        >
-                          <Eye size={15} />
-                        </button>
-
-                        <button
-                          onClick={() => triggerDeleteConfirm(inv.slug)}
-                          title="حذف الدعوة نهائياً"
-                          style={{
-                            padding: '0.55rem',
-                            borderRadius: '8px',
-                            border: '1px solid rgba(239, 68, 68, 0.2)',
-                            background: 'rgba(239, 68, 68, 0.05)',
-                            color: '#ef4444',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.3s'
-                          }}
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          )}
 
           {/* TAB 1: General Details */}
           {activeTab === 'general' && (
@@ -1203,16 +1008,6 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
                   <textarea rows="3" required value={invitationText} onChange={e => setInvitationText(e.target.value)} className="admin-input" style={{ resize: 'none' }} />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }} className="grid-responsive">
-                  <div className="form-group">
-                    <label className="admin-label">رقم تعريف الثيم على السيرفر (Theme ID)</label>
-                    <input type="text" required value={themeId} onChange={e => setThemeId(e.target.value)} className="admin-input" style={{ direction: 'ltr', textAlign: 'right' }} />
-                  </div>
-                  <div className="form-group">
-                    <label className="admin-label">رقم تعريف المستخدم (User ID)</label>
-                    <input type="text" required value={userId} onChange={e => setUserId(e.target.value)} className="admin-input" style={{ direction: 'ltr', textAlign: 'right' }} />
-                  </div>
-                </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }} className="grid-responsive">
                   <div className="form-group">
@@ -1263,14 +1058,10 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
                   <textarea rows="3" required value={venueDescription} onChange={e => setVenueDescription(e.target.value)} className="admin-input" style={{ resize: 'none' }} />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }} className="grid-responsive">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }} className="grid-responsive">
                   <div className="form-group">
-                    <label className="admin-label">خط عرض خريطة Google (Latitude)</label>
-                    <input type="text" required value={mapLat} onChange={e => setMapLat(e.target.value)} className="admin-input text-center" style={{ direction: 'ltr' }} />
-                  </div>
-                  <div className="form-group">
-                    <label className="admin-label">خط طول خريطة Google (Longitude)</label>
-                    <input type="text" required value={mapLng} onChange={e => setMapLng(e.target.value)} className="admin-input text-center" style={{ direction: 'ltr' }} />
+                    <label className="admin-label">رابط المكان من خرائط Google (Google Maps Link)</label>
+                    <input type="url" required value={mapUrl} onChange={e => setMapUrl(e.target.value)} className="admin-input text-left" style={{ direction: 'ltr' }} placeholder="https://maps.app.goo.gl/..." />
                   </div>
                 </div>
 
@@ -1484,11 +1275,11 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
                 </form>
 
                 {/* Images grid list */}
-                {(weddingData.galleryImages || []).length === 0 ? (
+                {galleryImages.length === 0 ? (
                   <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', padding: '2rem 0', fontSize: '0.85rem' }}>لا توجد صور مضافة للألبوم حتى الآن.</p>
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1.25rem' }}>
-                    {(weddingData.galleryImages || []).map((img, index) => (
+                    {galleryImages.map((img, index) => (
                       <div key={img.id} style={{
                         borderRadius: '12px',
                         border: '1px solid rgba(255,255,255,0.08)',
@@ -1511,7 +1302,7 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
                               <button type="button" onClick={() => handleMoveImage(index, 'up')} disabled={index === 0} style={{ padding: '2px', background: 'none', border: 'none', color: 'white', cursor: index === 0 ? 'not-allowed' : 'pointer', opacity: index === 0 ? 0.3 : 1 }}>
                                 <ArrowUp size={12} />
                               </button>
-                              <button type="button" onClick={() => handleMoveImage(index, 'down')} disabled={index === (weddingData.galleryImages || []).length - 1} style={{ padding: '2px', background: 'none', border: 'none', color: 'white', cursor: index === (weddingData.galleryImages || []).length - 1 ? 'not-allowed' : 'pointer', opacity: index === (weddingData.galleryImages || []).length - 1 ? 0.3 : 1 }}>
+                              <button type="button" onClick={() => handleMoveImage(index, 'down')} disabled={index === galleryImages.length - 1} style={{ padding: '2px', background: 'none', border: 'none', color: 'white', cursor: index === galleryImages.length - 1 ? 'not-allowed' : 'pointer', opacity: index === galleryImages.length - 1 ? 0.3 : 1 }}>
                                 <ArrowDown size={12} />
                               </button>
                             </div>
@@ -2013,23 +1804,6 @@ export default function AdminDashboard({ onLogout, singleInvitationMode, userEdi
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label className="admin-label">اسم صاحب الدعوة *</label>
-                    <input type="text" required value={newOwnerName} onChange={e => setNewOwnerName(e.target.value)} className="admin-input" />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label className="admin-label">رقم الهاتف *</label>
-                    <input type="text" required value={newPhone} onChange={e => setNewPhone(e.target.value)} className="admin-input" style={{ direction: 'ltr', textAlign: 'right' }} />
-                  </div>
-                  <div className="form-group">
-                    <label className="admin-label">كلمة المرور *</label>
-                    <input type="password" required value={createPassword} onChange={e => setCreatePassword(e.target.value)} className="admin-input text-center" style={{ direction: 'ltr' }} />
-                  </div>
-                </div>
 
                 {createError && (
                   <p style={{ color: '#ef4444', fontSize: '0.8rem', margin: 0, fontWeight: 'bold' }}>⚠️ {createError}</p>
